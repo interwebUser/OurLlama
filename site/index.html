@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ollama Model Catalog</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="title">
+        <h1>Ollama Model Catalog</h1>
+        <div class="subtitle">
+          Filter by VRAM & context, then rank by workflow + toolchain (when community data exists).
+          <span class="pill">Estimates are clearly labeled</span>
+        </div>
+      </div>
+      <div class="meta">
+        <div id="generatedAt" class="muted"></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <div class="grid">
+        <label class="field">
+          <span>Search</span>
+          <input id="q" type="text" placeholder="deepseek, qwen, llama, phi…" />
+        </label>
+
+        <label class="field">
+          <span>Workflow</span>
+          <select id="workflow"></select>
+        </label>
+
+        <label class="field">
+          <span>Toolchain</span>
+          <select id="toolchain"></select>
+        </label>
+
+        <label class="field">
+          <span>VRAM budget (GiB)</span>
+          <input id="budget" type="number" min="0" step="0.5" value="24" />
+        </label>
+
+        <label class="field">
+          <span>Target context (tokens)</span>
+          <input id="context" type="number" min="128" step="256" value="16384" />
+        </label>
+
+        <label class="field">
+          <span>KV cache type</span>
+          <select id="kv">
+            <option value="fp16" selected>fp16</option>
+            <option value="q8">q8</option>
+            <option value="q4">q4</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Prefer quality</span>
+          <select id="preferQuality">
+            <option value="true" selected>true</option>
+            <option value="false">false</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Min tokens/sec (optional)</span>
+          <input id="minTps" type="number" min="0" step="1" placeholder="e.g. 25" />
+        </label>
+
+        <label class="field">
+          <span>Max TTFT ms (optional)</span>
+          <input id="maxTtft" type="number" min="0" step="50" placeholder="e.g. 800" />
+        </label>
+
+        <div class="actions">
+          <button id="apply" class="btn">Apply</button>
+          <button id="reset" class="btn secondary">Reset</button>
+        </div>
+      </div>
+
+      <div class="note">
+        <strong>How fit is computed:</strong> weights + runtime overhead + KV cache.
+        KV sizing is <em>inferred</em> (tier heuristics) and marked <span class="pill">estimated</span>.
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="tableWrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Variant</th>
+              <th class="num">Size</th>
+              <th class="num">Catalog MaxCtx</th>
+              <th>Fit</th>
+              <th class="num">VRAM (cons)</th>
+              <th class="num">VRAM (opt)</th>
+              <th class="num">MaxCtx fits (cons)</th>
+              <th class="num">Trusted runs</th>
+              <th class="num">p50 TPS</th>
+              <th class="num">p50 TTFT</th>
+              <th class="num">Template votes</th>
+              <th class="num">Score</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div id="status" class="muted"></div>
+    </section>
+
+    <section class="panel" id="detail" hidden>
+      <div class="detailHeader">
+        <h2 id="detailTitle"></h2>
+        <button id="closeDetail" class="btn secondary">Close</button>
+      </div>
+      <div id="detailBody"></div>
+    </section>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.env
+.pgdata/
+site/data/catalog.json
+*.zip
