@@ -1,35 +1,26 @@
-INSERT INTO toolchain (slug, display_name, description, kind, components, verification)
-VALUES
-  ('vscode+roo-code', 'VS Code + Roo Code', 'Agentic coding in VS Code using Roo Code (local models via Ollama).', 'ide',
-    '{"editor":"VS Code","assistant":"Roo Code","runtime":"Ollama"}', 'admin_verified'),
-  ('vscode+continue', 'VS Code + Continue', 'Coding assistant in VS Code using Continue (supports Ollama).', 'ide',
-    '{"editor":"VS Code","assistant":"Continue","runtime":"Ollama"}', 'admin_verified'),
-  ('vscode+cline', 'VS Code + Cline', 'Agentic coding in VS Code using Cline (tool-use, plans, execution).', 'ide',
-    '{"editor":"VS Code","assistant":"Cline","runtime":"Ollama"}', 'admin_verified'),
-  ('vscode+copilot', 'VS Code + Copilot', 'Popular coding assistant; often compared against local workflows.', 'ide',
-    '{"editor":"VS Code","assistant":"Copilot"}', 'admin_verified'),
-  ('cursor', 'Cursor', 'Agentic-first editor; common benchmark for local-agent parity.', 'ide',
-    '{"editor":"Cursor"}', 'admin_verified'),
-  ('jetbrains+ai', 'JetBrains + AI Assistant', 'JetBrains IDEs with AI Assistant / local integration via plugins.', 'ide',
-    '{"editor":"JetBrains"}', 'admin_verified'),
-  ('neovim+avante', 'Neovim + Avante', 'Neovim agentic workflow using Avante.nvim.', 'ide',
-    '{"editor":"Neovim","assistant":"Avante.nvim","runtime":"Ollama"}', 'admin_verified'),
-  ('cli+aider', 'CLI + Aider', 'Terminal-first agentic coding with repo mapping and patches.', 'cli',
-    '{"assistant":"Aider","runtime":"Ollama"}', 'admin_verified'),
-  ('openwebui+ollama', 'Open WebUI + Ollama', 'Web chat UI for Ollama; common baseline for chat workflows.', 'webui',
-    '{"ui":"Open WebUI","runtime":"Ollama"}', 'admin_verified'),
-  ('anythingllm+ollama', 'AnythingLLM + Ollama', 'Chat/RAG desktop/web app commonly paired with Ollama.', 'webui',
-    '{"ui":"AnythingLLM","runtime":"Ollama"}', 'admin_verified'),
-  ('n8n+ollama', 'n8n + Ollama', 'Automation workflows that call local models via HTTP.', 'automation',
-    '{"orchestrator":"n8n","runtime":"Ollama"}', 'admin_verified'),
-  ('windsurf', 'Windsurf', 'Agentic coding editor (commonly compared to Cursor).', 'ide',
-    '{"editor":"Windsurf"}', 'admin_verified'),
-  ('zed', 'Zed', 'Fast editor with assistant ecosystem; used with local backends.', 'ide',
-    '{"editor":"Zed"}', 'admin_verified'),
-  ('tabby', 'Tabby', 'Self-hosted code completion server; sometimes paired with local models.', 'service',
-    '{"service":"Tabby"}', 'admin_verified'),
-  ('flowise+ollama', 'Flowise + Ollama', 'Low-code LLM workflow builder; common for RAG prototypes with Ollama.', 'automation',
-    '{"orchestrator":"Flowise","runtime":"Ollama"}', 'admin_verified'),
-  ('langflow+ollama', 'Langflow + Ollama', 'Visual LLM/RAG builder; commonly used with local runtimes.', 'automation',
-    '{"orchestrator":"Langflow","runtime":"Ollama"}', 'admin_verified')
-ON CONFLICT (slug) DO NOTHING;
+CREATE TABLE IF NOT EXISTS toolchain (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug text NOT NULL UNIQUE,
+  display_name text NOT NULL,
+  description text,
+  kind text NOT NULL DEFAULT 'editor',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Seed toolchains (safe to rerun)
+INSERT INTO toolchain (slug, display_name, description, kind) VALUES
+  ('vscode+roo-code', 'VS Code + Roo Code', 'Agentic coding in VS Code using Roo Code.', 'editor'),
+  ('vscode+continue', 'VS Code + Continue', 'VS Code assistant using Continue.', 'editor'),
+  ('vscode+cline', 'VS Code + Cline', 'Agentic coding with Cline in VS Code.', 'editor'),
+  ('vscode+copilot', 'VS Code + Copilot', 'Copilot inside VS Code.', 'editor'),
+  ('cursor', 'Cursor', 'Cursor IDE with integrated AI workflows.', 'editor'),
+  ('jetbrains+ai', 'JetBrains + AI Assistant', 'JetBrains IDEs with AI Assistant.', 'editor'),
+  ('neovim+avante', 'Neovim + Avante', 'Neovim with Avante plugin.', 'editor'),
+  ('cli+aider', 'CLI + Aider', 'Agentic coding in terminal using Aider.', 'cli'),
+  ('openwebui+ollama', 'Open WebUI + Ollama', 'Chat UI for Ollama.', 'ui'),
+  ('anythingllm+ollama', 'AnythingLLM + Ollama', 'AnythingLLM backed by Ollama.', 'ui'),
+  ('n8n+ollama', 'n8n + Ollama', 'Automation workflows using n8n with Ollama.', 'automation')
+ON CONFLICT (slug) DO UPDATE SET
+  display_name = EXCLUDED.display_name,
+  description  = EXCLUDED.description,
+  kind         = EXCLUDED.kind;
