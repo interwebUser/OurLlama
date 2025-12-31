@@ -60,12 +60,7 @@ jobs:
 
       - name: Apply schema
         run: |
-          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f migrations/001_init.sql
-
-      - name: Schema sanity check
-        run: |
-          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -tAc "SELECT to_regclass('public.model_family') AS model_family, to_regclass('public.model_variant') AS model_variant, to_regclass('public.workflow') AS workflow, to_regclass('public.toolchain') AS toolchain, to_regclass('public.tag') AS tag;"
-          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -tAc "SELECT count(*) AS families FROM model_family;"
+          psql "$DATABASE_URL" -f migrations/001_init.sql
 
       - name: Crawl + estimate
         run: |

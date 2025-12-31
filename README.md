@@ -1,110 +1,116 @@
-# OurLlama — Ollama Model Catalog (with VRAM + workflow guidance)
+# OurLlama — Ollama Model Catalog (VRAM-aware)
 
-OurLlama is a **model catalog and selection helper** for the Ollama ecosystem.
+A lightweight, **VRAM-aware catalog** of models in the Ollama Library — designed to help you pick a model that actually fits your **hardware + context window**, and to surface “what works” for real workflows (web dev, debugging, RAG, etc.).
 
-It publishes a static website (GitHub Pages) that answers the questions people actually have:
+This repo ships a **static website** (GitHub Pages) generated daily by GitHub Actions:
+- Crawl the Ollama Library (models + variants)
+- Compute first-pass **VRAM estimates** (clearly labeled as *estimated*)
+- Export a JSON catalog
+- Deploy the site
 
-- *Which variants fit my VRAM budget at the context length I want?*
-- *Which models work well for my workflow (web dev, debugging, RAG, video editing, etc.)?*
-- *What’s measured vs inferred? (everything is labeled and verifiable)*
-
-The catalog is generated in CI by crawling the Ollama Library and exporting a JSON dataset that the site loads.
-
----
-
-## What the site does today
-
-### ✅ Browse the full Ollama catalog
-- Model families and variants
-- Size, catalog max context, first-seen timestamps
-
-### ✅ Filter by hardware constraints
-- VRAM budget (GiB)
-- Target context (tokens)
-- KV cache type selector (affects the estimate)
-
-> VRAM numbers are **estimates** intended to be useful, not perfect. The UI calls this out explicitly.
-
-### ✅ Workflow + toolchain aware ranking (seeded)
-The database is initialized with a realistic set of “seen in the wild” workflows and toolchains, such as:
-- **Workflows:** Web dev, code review, debugging, RAG building, data analysis, video editing, transcription
-- **Toolchains:** VS Code + Roo Code, Continue, Cline, Cursor, JetBrains AI, Neovim workflows, CLI + Aider, Open WebUI, AnythingLLM, n8n
-
-Community signal tables exist (runs/templates/votes). The static Pages build exports them if present.
-
-### ✅ Tagging (explicit + inferred)
-We seed a tag taxonomy (use_case, specialty, training_focus) and apply lightweight heuristics to infer tags from model slugs.
-All inferred tags are marked as inferred/estimated unless verified.
+> GitHub Pages is static. v1 is **read-only**: it publishes the catalog + estimates + seeded workflow/toolchain metadata.  
+> Community submissions (runs/templates/votes) are in the schema but require a hosted API/DB to collect writes.
 
 ---
 
-## Architecture
+## What you can do on the site
 
-**Crawler → Normalizer → Postgres → JSON export → Static site**
-
-- `crawler/`: fetches Ollama library/tag pages and writes normalized records
-- `migrations/001_init.sql`: single “v1” schema + seeds (workflow/toolchain/tags)
-- `scripts/export_site.py`: exports `site/data/catalog.json`
-- `site/`: the static UI (filters + ranking)
-
-GitHub Actions runs the pipeline and deploys Pages.
+- Search model families / variants
+- Filter by:
+  - **VRAM budget (GiB)**
+  - **target context tokens**
+  - **KV cache type**
+  - **workflow** (web dev, debugging, refactor, transcription, …)
+  - **toolchain** (VS Code + Roo Code, Continue, Cline, Cursor, …)
+- Click any row for a detail view:
+  - estimated VRAM breakdown (weights + runtime overhead + KV cache)
+  - max context that fits (conservative)
+  - workflow/toolchain “signal” (if present)
 
 ---
 
-## Local development
+## How VRAM estimates work
 
-### 1) Start Postgres
+VRAM is estimated as:
+
+`weights_in_vram + runtime_overhead + (kv_bytes_per_token × context_tokens)`
+
+- **Weights in VRAM**: derived from the model variant size + quantization tag where available.
+- **Runtime overhead**: small fixed buffer for runtime allocations.
+- **KV cache**: estimated bytes/token (conservative + optimistic) based on model family/size heuristics.
+
+All of this is exported as *estimated* unless explicitly verified.
+
+---
+
+## Deploy on GitHub Pages (functional site)
+
+1) Push this repo to GitHub  
+2) GitHub → **Settings → Pages** → Source: **GitHub Actions**  
+3) Run the workflow once (Actions → “Deploy Pages” → Run workflow) or push to `main`
+
+The workflow:
+1. starts Postgres as a CI service
+2. applies `migrations/001_init.sql`
+3. crawls Ollama Library + computes estimates
+4. exports `site/data/catalog.json`
+5. deploys `site/` to GitHub Pages
+
+---
+
+## Run locally
+
+### Prereqs
+- Docker Desktop (or Docker Engine)
+
+### Start Postgres
 ```bash
 docker compose up -d db
 ```
 
-### 2) Apply schema
+### Apply schema
 ```bash
-psql "postgresql://postgres:postgres@localhost:5432/ollama_catalog" -f migrations/001_init.sql
+docker compose run --rm crawler psql "$DATABASE_URL" -f migrations/001_init.sql
 ```
 
-### 3) Crawl + estimate
+### Crawl + estimate
 ```bash
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ollama_catalog"
-python -m crawler.main --estimate --context-default 8192 --kv-cache-type fp16
+docker compose run --rm crawler python -m crawler.main --estimate --context-default 8192 --kv-cache-type fp16
 ```
 
-### 4) Export JSON + serve the site
+### Export JSON for the site
 ```bash
-python scripts/export_site.py --out site/data/catalog.json
-python -m http.server 8080 --directory site
+docker compose run --rm crawler python scripts/export_site.py --out site/data/catalog.json
 ```
 
-Open: http://localhost:8080
+### Serve the site
+```bash
+docker compose up -d site
+# open http://localhost:8080
+```
 
 ---
 
-## Deploy to GitHub Pages
+## What’s seeded out of the box
 
-1. Push the repo to GitHub.
-2. Repo Settings → **Pages** → Source: **GitHub Actions**
-3. Run the workflow (Actions tab) or push to `main`.
+To make v1 useful immediately, the migration seeds:
+- **Workflows** (web-dev, debugging, refactor, RAG building, transcription, video editing, …)
+- **Toolchains** (VS Code + Roo Code/Continue/Cline/Copilot, Cursor, Windsurf, JetBrains AI, …)
+- **Tags + heuristic tag rules** (use case, specialty, training focus)
 
-The workflow:
-1) starts Postgres  
-2) applies `001_init.sql`  
-3) crawls + estimates  
-4) exports JSON  
-5) deploys `/site` to GitHub Pages  
+These seeds are marked `admin_verified` as “site defaults,” not as performance claims.
 
 ---
 
-## Contributing
+## Roadmap (optional)
 
-Right now the Pages site is read-only. The schema supports community submissions (runs/templates/votes), but the write-path is not published as an API in v1.
-
-If you want to help:
-- Propose new workflows/toolchains/tags by editing `migrations/001_init.sql`
-- Improve tag inference rules
-- Improve the VRAM estimator (clearly label changes as estimated)
+- Add hosted DB + API for write operations:
+  - submit workflow runs (TPS/TTFT/quality)
+  - submit and vote on templates per workflow/toolchain
+- Add admin verification UI and provenance tracking (measured vs inferred)
 
 ---
 
 ## License
 
-MIT
+MIT (or your preferred license).
