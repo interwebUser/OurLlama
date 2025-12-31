@@ -60,7 +60,7 @@ jobs:
 
       - name: Apply schema
         run: |
-          psql "$DATABASE_URL" -f migrations/001_init.sql
+          psql -v ON_ERROR_STOP=1 "$DATABASE_URL" -f migrations/001_init.sql
 
       - name: Crawl + estimate
         run: |
