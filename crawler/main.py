@@ -124,7 +124,94 @@ def main():
                                 confidence=est.confidence,
                                 verification="estimated",
                             )
-                            stats["estimates_written"] += 2
+                                                        # Component estimates (useful for VRAM budget + context math)
+                            # NOTE: kv_bytes_per_token_* derived from estimated KV GiB at the selected context length.
+                            kv_bpt_opt = (est.kv_gib_opt * (1024 ** 3)) / float(ctx) if ctx else None
+                            kv_bpt_cons = (est.kv_gib_cons * (1024 ** 3)) / float(ctx) if ctx else None
+
+                            insert_estimate(
+                                conn,
+                                variant_id=variant_id,
+                                profile_id=profile_id,
+                                estimate_type="vram_weights_gib",
+                                value=est.weights_gib,
+                                units="GiB",
+                                context_tokens=int(ctx),
+                                kv_cache_type=args.kv_cache_type,
+                                offload_fraction=1.0,
+                                confidence=est.confidence,
+                                verification="estimated",
+                            )
+                            insert_estimate(
+                                conn,
+                                variant_id=variant_id,
+                                profile_id=profile_id,
+                                estimate_type="vram_runtime_overhead_gib",
+                                value=est.runtime_overhead_gib,
+                                units="GiB",
+                                context_tokens=int(ctx),
+                                kv_cache_type=args.kv_cache_type,
+                                offload_fraction=1.0,
+                                confidence=est.confidence,
+                                verification="estimated",
+                            )
+                            insert_estimate(
+                                conn,
+                                variant_id=variant_id,
+                                profile_id=profile_id,
+                                estimate_type="vram_kv_gib_opt",
+                                value=est.kv_gib_opt,
+                                units="GiB",
+                                context_tokens=int(ctx),
+                                kv_cache_type=args.kv_cache_type,
+                                offload_fraction=1.0,
+                                confidence=est.confidence,
+                                verification="estimated",
+                            )
+                            insert_estimate(
+                                conn,
+                                variant_id=variant_id,
+                                profile_id=profile_id,
+                                estimate_type="vram_kv_gib_cons",
+                                value=est.kv_gib_cons,
+                                units="GiB",
+                                context_tokens=int(ctx),
+                                kv_cache_type=args.kv_cache_type,
+                                offload_fraction=1.0,
+                                confidence=est.confidence,
+                                verification="estimated",
+                            )
+                            if kv_bpt_opt is not None:
+                                insert_estimate(
+                                    conn,
+                                    variant_id=variant_id,
+                                    profile_id=profile_id,
+                                    estimate_type="kv_bytes_per_token_opt",
+                                    value=kv_bpt_opt,
+                                    units="bytes/token",
+                                    context_tokens=int(ctx),
+                                    kv_cache_type=args.kv_cache_type,
+                                    offload_fraction=1.0,
+                                    confidence=est.confidence,
+                                    verification="estimated",
+                                )
+                            if kv_bpt_cons is not None:
+                                insert_estimate(
+                                    conn,
+                                    variant_id=variant_id,
+                                    profile_id=profile_id,
+                                    estimate_type="kv_bytes_per_token_cons",
+                                    value=kv_bpt_cons,
+                                    units="bytes/token",
+                                    context_tokens=int(ctx),
+                                    kv_cache_type=args.kv_cache_type,
+                                    offload_fraction=1.0,
+                                    confidence=est.confidence,
+                                    verification="estimated",
+                                )
+
+                            stats["estimates_written"] += 8
+
 
                 conn.commit()
                 time.sleep(args.delay)

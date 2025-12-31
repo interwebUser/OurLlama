@@ -1,9 +1,14 @@
 const GiB = 1024 ** 3;
 
 function kvOverheadFactor(kv) {
+  // Scale KV cache memory relative to fp16 baseline estimates.
+  // fp16 ~= 2 bytes/elem; q8 ~= 1 byte/elem; q4 ~= 0.5 bytes/elem (with a conservative overhead).
   const k = (kv || 'fp16').toLowerCase();
-  return (k === 'q4' || k === 'int4') ? 1.10 : 1.0;
+  if (k === 'q8' || k === 'int8') return 0.50;
+  if (k === 'q4' || k === 'int4') return 0.275; // 0.25 * 1.10 (slightly conservative)
+  return 1.0;
 }
+
 
 function fmtNum(x, digits=2) {
   if (x === null || x === undefined || Number.isNaN(x)) return '';
@@ -167,6 +172,30 @@ function renderDetail(variant, family, comps, ctx, budget, kvType, runAgg, bestT
   toolchainSel.appendChild(option('Any', ''));
   for (const t of catalog.toolchains || []) toolchainSel.appendChild(option(t.display_name, t.slug));
 
+const useCaseSel = el('useCase');
+useCaseSel.appendChild(option('Any', ''));
+const useCaseTags = (catalog.tags || []).filter(t => (t.category || '') === 'use_case');
+for (const t of useCaseTags) useCaseSel.appendChild(option(t.name, t.slug));
+
+const hwSel = el('hardwareProfile');
+hwSel.appendChild(option('Custom', ''));
+const hwProfiles = catalog.constraint_profiles || [];
+for (const p of hwProfiles) hwSel.appendChild(option(p.display_name, p.slug));
+hwSel.addEventListener('change', () => {
+  const slug = hwSel.value;
+  const p = hwProfiles.find(x => x.slug === slug);
+  if (p && p.vram_gib !== null && p.vram_gib !== undefined && !Number.isNaN(Number(p.vram_gib))) {
+    el('budget').value = Number(p.vram_gib);
+  }
+});
+
+const familyTags = new Map();
+for (const ft of (catalog.family_tags || [])) {
+  const fid = ft.family_id;
+  if (!familyTags.has(fid)) familyTags.set(fid, new Set());
+  familyTags.get(fid).add(ft.tag_slug);
+}
+
   const familiesBySlug = new Map((catalog.families || []).map(f => [f.slug, f]));
   const variants = catalog.variants || [];
   const compsByVariantId = new Map((catalog.variant_components || []).map(c => [c.variant_id, c]));
@@ -185,6 +214,7 @@ function renderDetail(variant, family, comps, ctx, budget, kvType, runAgg, bestT
     const q = (el('q').value || '').trim().toLowerCase();
     const workflow = el('workflow').value;
     const toolchain = el('toolchain').value;
+    const useCase = el('useCase').value;
     const budget = Number(el('budget').value || 0);
     const ctx = Number(el('context').value || 0);
     const kv = el('kv').value;
@@ -198,6 +228,12 @@ function renderDetail(variant, family, comps, ctx, budget, kvType, runAgg, bestT
       const fam = familiesBySlug.get(v.family_slug);
       const text = `${v.family_slug} ${v.tag} ${fam?.display_name || ''} ${(fam?.labels || []).join(' ')}`.toLowerCase();
       if (q && !text.includes(q)) continue;
+
+if (useCase) {
+  const fid = fam?.id;
+  const tags = fid ? familyTags.get(fid) : null;
+  if (!tags || !tags.has(useCase)) continue;
+}
 
       const comps = compsByVariantId.get(v.id);
       if (!comps) continue;
