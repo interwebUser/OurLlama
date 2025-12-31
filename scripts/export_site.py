@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import os, json, argparse
+from datetime import datetime, timezone
+
 import psycopg
 from psycopg.rows import dict_row
-from datetime import datetime, timezone
 
 DEFAULT_WORKFLOWS = [
     {"slug": "web-dev", "name": "Web Development", "description": "Coding workflows in an editor/IDE with an assistant/agent.", "category": "software"},
@@ -27,9 +29,10 @@ def table_exists(cur, table: str) -> bool:
 def view_exists(cur, view: str) -> bool:
     return to_regclass(cur, f"public.{view}") is not None
 
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--db-url", default=os.environ.get("DATABASE_URL",""))
+    ap.add_argument("--db-url", default=os.environ.get("DATABASE_URL", ""))
     ap.add_argument("--out", default="site/data/catalog.json")
     args = ap.parse_args()
 
@@ -41,6 +44,7 @@ def main():
 
     with psycopg.connect(args.db_url, row_factory=dict_row) as conn:
         with conn.cursor() as cur:
+            # Required core tables
             required = ["model_family", "model_variant", "derived_estimate", "estimate_profile"]
             missing_required = [t for t in required if not table_exists(cur, t)]
             if missing_required:
@@ -56,7 +60,7 @@ def main():
                     f"{missing_required}. Existing tables: {existing}"
                 )
 
-            # Optional workflow layer
+            # Optional workflow/toolchain (seeded by migration; exporter tolerates absence)
             if table_exists(cur, "workflow"):
                 cur.execute("SELECT slug, name, description, category FROM workflow ORDER BY name;")
                 workflows = cur.fetchall()
@@ -89,7 +93,7 @@ def main():
             """)
             variants = cur.fetchall()
 
-            # Components for VRAM fit math
+            # VRAM estimator components (view)
             if view_exists(cur, "v_variant_vram_components"):
                 cur.execute("""
                     SELECT variant_id::text,
@@ -105,7 +109,7 @@ def main():
             else:
                 comps = []
 
-            # Optional aggregations
+            # Community signal
             if view_exists(cur, "v_workflow_run_agg") and table_exists(cur, "workflow") and table_exists(cur, "toolchain"):
                 cur.execute("""
                     SELECT
@@ -129,82 +133,62 @@ def main():
                 run_agg = []
 
             if view_exists(cur, "v_best_task_template") and table_exists(cur, "workflow"):
-                if table_exists(cur, "toolchain"):
-                    cur.execute("""
-                        SELECT
-                          coalesce(vbt.variant_id::text, null) AS variant_id,
-                          w.slug AS workflow_slug,
-                          tc.slug AS toolchain_slug,
-                          vbt.task_name,
-                          vbt.temperature::float8,
-                          vbt.top_k,
-                          vbt.top_p::float8,
-                          vbt.context_usage_pct::float8,
-                          vbt.notes,
-                          vbt.vote_count::bigint,
-                          vbt.vote_sum::bigint,
-                          vbt.submitted_at::text,
-                          vbt.verification::text
-                        FROM v_best_task_template vbt
-                        JOIN workflow w ON w.id = vbt.workflow_id
-                        LEFT JOIN toolchain tc ON tc.id = vbt.toolchain_id
-                        ORDER BY w.slug;
-                    """)
-                else:
-                    cur.execute("""
-                        SELECT
-                          coalesce(vbt.variant_id::text, null) AS variant_id,
-                          w.slug AS workflow_slug,
-                          null::text AS toolchain_slug,
-                          vbt.task_name,
-                          vbt.temperature::float8,
-                          vbt.top_k,
-                          vbt.top_p::float8,
-                          vbt.context_usage_pct::float8,
-                          vbt.notes,
-                          vbt.vote_count::bigint,
-                          vbt.vote_sum::bigint,
-                          vbt.submitted_at::text,
-                          vbt.verification::text
-                        FROM v_best_task_template vbt
-                        JOIN workflow w ON w.id = vbt.workflow_id
-                        ORDER BY w.slug;
-                    """)
+                cur.execute("""
+                    SELECT
+                      coalesce(vbt.variant_id::text, null) AS variant_id,
+                      w.slug AS workflow_slug,
+                      tc.slug AS toolchain_slug,
+                      vbt.task_name,
+                      vbt.temperature::float8,
+                      vbt.top_k,
+                      vbt.top_p::float8,
+                      vbt.context_usage_pct::float8,
+                      vbt.notes,
+                      vbt.vote_count::bigint,
+                      vbt.vote_sum::bigint,
+                      vbt.submitted_at::text,
+                      vbt.verification::text
+                    FROM v_best_task_template vbt
+                    JOIN workflow w ON w.id = vbt.workflow_id
+                    LEFT JOIN toolchain tc ON tc.id = vbt.toolchain_id
+                    ORDER BY w.slug;
+                """)
                 best_templates = cur.fetchall()
             else:
                 best_templates = []
 
-# Tags (explicit + inferred)
-if table_exists(cur, "tag"):
-    cur.execute("SELECT slug, name, category, description FROM tag ORDER BY category, name;")
-    tags = cur.fetchall()
-else:
-    tags = []
+            # Tags + effective family tags
+            if table_exists(cur, "tag"):
+                cur.execute("SELECT slug, name, category, description FROM tag ORDER BY category, name;")
+                tags = cur.fetchall()
+            else:
+                tags = []
 
-if view_exists(cur, "v_family_tags_effective"):
-    cur.execute("""
-        SELECT family_id::text AS family_id,
-               tag_slug,
-               confidence::float8 AS confidence,
-               source,
-               verification::text AS verification
-        FROM v_family_tags_effective
-        ORDER BY family_id, tag_slug;
-    """)
-    family_tags = cur.fetchall()
-else:
-    family_tags = []
+            if view_exists(cur, "v_family_tags_effective"):
+                cur.execute("""
+                    SELECT family_id::text AS family_id,
+                           tag_slug,
+                           confidence::float8 AS confidence,
+                           source,
+                           verification::text AS verification
+                    FROM v_family_tags_effective
+                    ORDER BY family_id, tag_slug;
+                """)
+                family_tags = cur.fetchall()
+            else:
+                family_tags = []
 
-if table_exists(cur, "constraint_profile"):
-    cur.execute("""
-        SELECT slug, display_name, vram_gib::float8 AS vram_gib, ram_gib::float8 AS ram_gib,
-               gpu_model, cpu_model, notes, verification::text AS verification
-        FROM constraint_profile
-        ORDER BY display_name;
-    """)
-    constraint_profiles = cur.fetchall()
-else:
-    constraint_profiles = []
+            # Hardware presets
+            if table_exists(cur, "constraint_profile"):
+                cur.execute("""
+                    SELECT slug, display_name, vram_gib::float8 AS vram_gib, ram_gib::float8 AS ram_gib,
+                           gpu_model, cpu_model, notes, verification::text AS verification
+                    FROM constraint_profile
+                    ORDER BY display_name;
+                """)
+                constraint_profiles = cur.fetchall()
+            else:
+                constraint_profiles = []
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -227,7 +211,12 @@ else:
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
-    print(f"Wrote {out_path} (families={len(families)}, variants={len(variants)}, comps={len(comps)})")
+    print(
+        f"Wrote {out_path} "
+        f"(families={len(families)}, variants={len(variants)}, comps={len(comps)}, "
+        f"tags={len(tags)}, workflows={len(workflows)}, toolchains={len(toolchains)})"
+    )
+
 
 if __name__ == "__main__":
     main()
