@@ -4,13 +4,8 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'fk_workflow_default_workload'
-  ) THEN
-    ALTER TABLE workflow
-      ADD CONSTRAINT fk_workflow_default_workload
-      FOREIGN KEY (default_workload_profile_id) REFERENCES workload_profile(id) ON DELETE SET NULL;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'verification_status') THEN
+    CREATE TYPE verification_status AS ENUM ('catalog','estimated','community_verified','admin_verified');
   END IF;
 END$$;
 
