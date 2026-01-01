@@ -1,3 +1,4 @@
+.roo/
 __pycache__/
 *.pyc
 .env

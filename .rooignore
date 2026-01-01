@@ -1,0 +1,31 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node / build artifacts
+node_modules/
+dist/
+build/
+site/data/*.json
+
+# CI / temp
+*.log
+*.tmp
+*.cache
+
+# DB / local state
+*.sqlite*
+.pgdata/
+docling_cache/
+docling_uploads/
+
+# Archives
+*.zip
+*.tar
+*.gz
+
+# Secrets (examples)
+.env
+.env.*
+secrets/
